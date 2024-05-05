@@ -271,6 +271,7 @@ public class ClassWriter {
 
       if (node.type != ClassNode.CLASS_ANONYMOUS) {
         buffer.appendLineSeparator();
+
       }
     }
     finally {
@@ -639,6 +640,7 @@ public class ClassWriter {
       boolean isInterface = cl.hasModifier(CodeConstants.ACC_INTERFACE);
       boolean isAnnotation = cl.hasModifier(CodeConstants.ACC_ANNOTATION);
       boolean isDeprecated = mt.hasAttribute(StructGeneralAttribute.ATTRIBUTE_DEPRECATED);
+      boolean isRecord = cl.getRecordComponents() != null;
       boolean clInit = false, dInit = false;
 
       MethodDescriptor md = MethodDescriptor.parseDescriptor(mt.getDescriptor());
@@ -867,6 +869,18 @@ public class ClassWriter {
 
             buffer.append(code);
 
+
+            if (isRecord) {
+              if (init && isBasicRecordConstructor(mt, node, code)) {
+                hideMethod = true;
+              } else if (!init && isRegularFieldMethod(mt, node, code)) {
+                hideMethod = true;
+              }
+            }
+
+
+
+
             tracer.setCurrentSourceLine(codeTracer.getCurrentSourceLine());
             tracer.addTracer(codeTracer);
           }
@@ -901,6 +915,74 @@ public class ClassWriter {
 
     return !hideMethod;
   }
+
+
+  private boolean isRegularFieldMethod(StructMethod mt, ClassNode node, TextBuffer code) {
+
+//    MethodWrapper methodWrapper = node.getWrapper().getMethodWrapper(mt.getName(), mt.getDescriptor());
+//    MethodDescriptor md = MethodDescriptor.parseDescriptor(mt.getDescriptor());
+    boolean isRecord = node.classStruct.getRecordComponents() != null;
+    String methodDescriptor = mt.getDescriptor();
+    if (isRecord && methodDescriptor.startsWith("()")) {
+
+      methodDescriptor = methodDescriptor.substring(2);
+
+      if (node.classStruct.hasField(mt.getName(), methodDescriptor) &&
+        (code.countLines() == 1) &&
+        (code.count("return this.%s;".formatted(mt.getName()), 0) == 1)
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private static boolean isBasicRecordConstructor(StructMethod mt, ClassNode node, TextBuffer code){
+
+
+    MethodWrapper methodWrapper = node.getWrapper().getMethodWrapper(mt.getName(), mt.getDescriptor());
+    MethodDescriptor md = MethodDescriptor.parseDescriptor(mt.getDescriptor());
+
+
+    List<StructRecordComponent> classFields = node.classStruct.getRecordComponents();
+    Map<String, String> parametersMap = classFields.stream().collect(
+      Collectors.toMap(StructRecordComponent::getName, StructRecordComponent::getDescriptor));
+
+    int index = methodWrapper.varproc.getFirstParameterVarIndex();
+
+    // check whether parameters are matching with the record Components
+
+    for (int i = methodWrapper.varproc.getFirstParameterPosition(); i < md.params.length; i++) {
+      VarVersionPair pair = new VarVersionPair(index, 0);
+      String name = methodWrapper.varproc.getVarName(pair);
+
+      if (!(parametersMap.containsKey(name) &&
+        parametersMap.get(name).equals(md.params[i].getValue()))) {
+        return false;
+      }
+      index += md.params[i].getStackSize();
+    }
+
+    // check whether the number of lines is mathcing exactly
+    if (code.countLines() != md.params.length) {
+      return false;
+    }
+    // check whether field allocation are matching
+
+    index = methodWrapper.varproc.getFirstParameterVarIndex();
+    for (int i = methodWrapper.varproc.getFirstParameterPosition(); i < md.params.length; i++) {
+      VarVersionPair pair = new VarVersionPair(index, 0);
+      String name = methodWrapper.varproc.getVarName(pair);
+      String fieldAssignment = ("this.%s = %s;").formatted(name, name);
+      if (code.count(fieldAssignment, i) != 1) {
+         return false;
+      }
+      index += md.params[i].getStackSize();
+    }
+    return true;
+  }
+
 
   private static boolean isVarArgRecord(StructClass cl) {
     String canonicalConstructorDescriptor =
@@ -1095,6 +1177,8 @@ public class ClassWriter {
   	}
 
     int count = 0;
+
+
     for (StructMethod mt : cl.getMethods()) {
       if (CodeConstants.INIT_NAME.equals(mt.getName()) && ++count > 1) {
         return false;
@@ -1103,6 +1187,8 @@ public class ClassWriter {
 
     return true;
   }
+
+
 
   private static Map.Entry<VarType, GenericFieldDescriptor> getFieldTypeData(StructField fd) {
     VarType fieldType = new VarType(fd.getDescriptor(), false);
