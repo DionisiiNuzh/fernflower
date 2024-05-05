@@ -871,15 +871,8 @@ public class ClassWriter {
 
 
             if (isRecord) {
-              if (init && isBasicRecordConstructor(mt, node, code)) {
-                hideMethod = true;
-              } else if (!init && isRegularFieldMethod(mt, node, code)) {
-                hideMethod = true;
-              }
+              hideMethod |= isRedundantRecordMethod(init, mt, node, code);
             }
-
-
-
 
             tracer.setCurrentSourceLine(codeTracer.getCurrentSourceLine());
             tracer.addTracer(codeTracer);
@@ -916,70 +909,50 @@ public class ClassWriter {
     return !hideMethod;
   }
 
+  private static boolean isRedundantRecordMethod(boolean init, StructMethod mt, ClassNode node, TextBuffer code) {
+      return (init)? isRedundantRecordConstructor(mt, node, code) : isRedundantRecordFieldGetter(mt, node, code);
+  }
 
-  private boolean isRegularFieldMethod(StructMethod mt, ClassNode node, TextBuffer code) {
-
-//    MethodWrapper methodWrapper = node.getWrapper().getMethodWrapper(mt.getName(), mt.getDescriptor());
-//    MethodDescriptor md = MethodDescriptor.parseDescriptor(mt.getDescriptor());
+  private static boolean isRedundantRecordFieldGetter(StructMethod mt, ClassNode node, TextBuffer code) {
     boolean isRecord = node.classStruct.getRecordComponents() != null;
     String methodDescriptor = mt.getDescriptor();
+
     if (isRecord && methodDescriptor.startsWith("()")) {
-
       methodDescriptor = methodDescriptor.substring(2);
-
-      if (node.classStruct.hasField(mt.getName(), methodDescriptor) &&
-        (code.countLines() == 1) &&
-        (code.count("return this.%s;".formatted(mt.getName()), 0) == 1)
-      ) {
-        return true;
-      }
+      // method's name, type is matching field's and only line is return a field
+      return node.classStruct.hasField(mt.getName(), methodDescriptor) &&
+          (code.countLines() == 1) &&
+          (code.count("return this.%s;".formatted(mt.getName()), 0) == 1);
     }
 
     return false;
   }
 
-  private static boolean isBasicRecordConstructor(StructMethod mt, ClassNode node, TextBuffer code){
-
+  private static boolean isRedundantRecordConstructor(StructMethod mt, ClassNode node, TextBuffer code){
 
     MethodWrapper methodWrapper = node.getWrapper().getMethodWrapper(mt.getName(), mt.getDescriptor());
     MethodDescriptor md = MethodDescriptor.parseDescriptor(mt.getDescriptor());
-
-
-    List<StructRecordComponent> classFields = node.classStruct.getRecordComponents();
-    Map<String, String> parametersMap = classFields.stream().collect(
-      Collectors.toMap(StructRecordComponent::getName, StructRecordComponent::getDescriptor));
-
-    int index = methodWrapper.varproc.getFirstParameterVarIndex();
-
-    // check whether parameters are matching with the record Components
-
-    for (int i = methodWrapper.varproc.getFirstParameterPosition(); i < md.params.length; i++) {
-      VarVersionPair pair = new VarVersionPair(index, 0);
-      String name = methodWrapper.varproc.getVarName(pair);
-
-      if (!(parametersMap.containsKey(name) &&
-        parametersMap.get(name).equals(md.params[i].getValue()))) {
-        return false;
-      }
-      index += md.params[i].getStackSize();
-    }
 
     // check whether the number of lines is mathcing exactly
     if (code.countLines() != md.params.length) {
       return false;
     }
-    // check whether field allocation are matching
 
-    index = methodWrapper.varproc.getFirstParameterVarIndex();
+    int index = methodWrapper.varproc.getFirstParameterVarIndex();
     for (int i = methodWrapper.varproc.getFirstParameterPosition(); i < md.params.length; i++) {
-      VarVersionPair pair = new VarVersionPair(index, 0);
-      String name = methodWrapper.varproc.getVarName(pair);
-      String fieldAssignment = ("this.%s = %s;").formatted(name, name);
-      if (code.count(fieldAssignment, i) != 1) {
-         return false;
+      String name = methodWrapper.varproc.getVarName(new VarVersionPair(index, 0));
+      // matches constructors parameter's name and type with record component field's
+      if (!node.classStruct.hasField(name, md.params[i].getValue())) {
+        return false;
+      }
+
+      // check whether code corresponding field assignment
+      if (code.count(("this.%s = %s;").formatted(name, name), i) != 1) {
+        return false;
       }
       index += md.params[i].getStackSize();
     }
+
     return true;
   }
 
