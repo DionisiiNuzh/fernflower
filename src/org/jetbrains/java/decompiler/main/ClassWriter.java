@@ -933,7 +933,7 @@ public class ClassWriter {
     MethodWrapper methodWrapper = node.getWrapper().getMethodWrapper(mt.getName(), mt.getDescriptor());
     MethodDescriptor md = MethodDescriptor.parseDescriptor(mt.getDescriptor());
 
-    // check whether the number of lines is mathcing exactly
+    // check whether the number of lines is matching exactly
     if (code.countLines() != md.params.length) {
       return false;
     }
@@ -942,7 +942,7 @@ public class ClassWriter {
     for (int i = methodWrapper.varproc.getFirstParameterPosition(); i < md.params.length; i++) {
       String name = methodWrapper.varproc.getVarName(new VarVersionPair(index, 0));
       // matches constructors parameter's name and type with record component field's
-      if (!node.classStruct.hasField(name, md.params[i].getValue())) {
+      if (!node.classStruct.hasField(name, md.params[i].toString())) {
         return false;
       }
 
