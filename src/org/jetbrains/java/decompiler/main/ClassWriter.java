@@ -870,7 +870,7 @@ public class ClassWriter {
             buffer.append(code);
 
 
-            if (isRecord) {
+            if (DecompilerContext.getOption(IFernflowerPreferences.REMOVE_REDUNDANT_RECORD_METHODS)) {
               hideMethod |= isRedundantRecordMethod(init, mt, node, code);
             }
 
@@ -910,14 +910,14 @@ public class ClassWriter {
   }
 
   private static boolean isRedundantRecordMethod(boolean init, StructMethod mt, ClassNode node, TextBuffer code) {
-      return (init)? isRedundantRecordConstructor(mt, node, code) : isRedundantRecordFieldGetter(mt, node, code);
+    boolean isRecord = node.classStruct.getRecordComponents() != null;
+    return  isRecord && ((init)? isRedundantRecordConstructor(mt, node, code) : isRedundantRecordFieldGetter(mt, node, code));
   }
 
   private static boolean isRedundantRecordFieldGetter(StructMethod mt, ClassNode node, TextBuffer code) {
-    boolean isRecord = node.classStruct.getRecordComponents() != null;
     String methodDescriptor = mt.getDescriptor();
 
-    if (isRecord && methodDescriptor.startsWith("()")) {
+    if (methodDescriptor.startsWith("()")) {
       methodDescriptor = methodDescriptor.substring(2);
       // method's name, type is matching field's and only line is return a field
       return node.classStruct.hasField(mt.getName(), methodDescriptor) &&

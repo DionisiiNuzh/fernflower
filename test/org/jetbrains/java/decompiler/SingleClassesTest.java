@@ -41,7 +41,8 @@ public class SingleClassesTest {
                          IFernflowerPreferences.IGNORE_INVALID_BYTECODE, "1",
                          IFernflowerPreferences.VERIFY_ANONYMOUS_CLASSES, "1",
                          IFernflowerPreferences.CONVERT_PATTERN_SWITCH, "1",
-                         IFernflowerPreferences.CONVERT_RECORD_PATTERN, "1"
+                         IFernflowerPreferences.CONVERT_RECORD_PATTERN, "1",
+                         IFernflowerPreferences.REMOVE_REDUNDANT_RECORD_METHODS, "1"
     ));
   }
 
